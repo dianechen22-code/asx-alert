@@ -16,9 +16,65 @@ jobs:
         with:
           python-version: "3.11"
 
-      - run: pip install yfinance pandas requests lxml
+      - name: Install dependencies
+        run: pip install -r requirements.txt
 
-      - run: python asx_scanner_fast.py
+      - name: Run scanner
+        shell: bash
+        run: |
+          set -o pipefail
+          python asx_scanner_fast.py 2>&1 | tee scanner.log
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+
+      - name: Send Telegram failure alert
+        if: ${{ failure() }}
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          import requests
+
+          token = os.environ["TELEGRAM_BOT_TOKEN"]
+          chat_id = os.environ["TELEGRAM_CHAT_ID"]
+          server = os.environ["GITHUB_SERVER_URL"]
+          repo = os.environ["GITHUB_REPOSITORY"]
+          run_id = os.environ["GITHUB_RUN_ID"]
+          workflow = os.environ["GITHUB_WORKFLOW"]
+
+          run_url = f"{server}/{repo}/actions/runs/{run_id}"
+
+          log_text = ""
+          log_path = Path("scanner.log")
+          if log_path.exists():
+              log_text = log_path.read_text(encoding="utf-8", errors="replace")[-1500:]
+
+          message = (
+              f"ASX scanner failed.\n"
+              f"Workflow: {workflow}\n"
+              f"Run: {run_url}\n\n"
+              f"Last log lines:\n{log_text}"
+          )
+
+          response = requests.post(
+              f"https://api.telegram.org/bot{token}/sendMessage",
+              json={"chat_id": chat_id, "text": message[:4000]},
+              timeout=30,
+          )
+          response.raise_for_status()
+          PY
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          GITHUB_SERVER_URL: ${{ github.server_url }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_WORKFLOW: ${{ github.workflow }}
+
+      - name: Upload scanner log
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: scanner-log
+          path: scanner.log
