@@ -44,7 +44,7 @@ def send(msg: str) -> None:
 # ASX200 TICKERS
 # --------------------------
 
-def get_asx200() -> list[str]:
+def get_asx200x() -> list[str]:
     url = "https://en.wikipedia.org/wiki/S%26P/ASX_200"
 
     headers = {
