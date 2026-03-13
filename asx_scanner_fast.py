@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import traceback
 import pandas as pd
 import yfinance as yf
 import requests
@@ -189,4 +190,10 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        print("FATAL ERROR:")
+        print(str(e))
+        traceback.print_exc()
+        raise
