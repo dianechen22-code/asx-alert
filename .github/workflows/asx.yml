@@ -16,7 +16,7 @@ jobs:
         with:
           python-version: "3.11"
 
-      - run: pip install yfinance pandas requests
+      - run: pip install -r requirements.txt
 
       - run: python asx_scanner_fast.py
         env:
