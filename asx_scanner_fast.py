@@ -244,44 +244,41 @@ def main() -> None:
     if market.empty or len(market) < 30:
         raise ValueError("Not enough market data for index.")
 
-print("Downloading price data...")
+    print("Downloading price data...")
 
-df = yf.download(
-    tickers,
-    period="1y",
-    interval="1d",
-    group_by="ticker",
-    progress=False,
-    auto_adjust=False
-)
-
-valid_tickers = []
-failed_tickers = []
-
-for ticker in tickers:
-    try:
-        if ticker in df.columns.levels[0]:
-            data = df[ticker].dropna()
-            if len(data) > 0:
-                valid_tickers.append(ticker)
-            else:
-                failed_tickers.append(ticker)
-        else:
-            failed_tickers.append(ticker)
-    except Exception:
-        failed_tickers.append(ticker)
-
-print(f"Price data success: {len(valid_tickers)}")
-print(f"Price data failures: {len(failed_tickers)}")
-print("Scan summary:")
-print(f"Signals detected: {len(results)}")
-print(f"Top opportunities returned: {len(top)}")
-
-if failed_tickers:
-    print("Failed tickers sample:", failed_tickers[:10])
+    df = yf.download(
+        tickers,
+        period="1y",
+        interval="1d",
+        group_by="ticker",
+        progress=False,
+        auto_adjust=False
+    )
 
     if df.empty:
         raise ValueError("No stock data downloaded.")
+
+    valid_tickers = []
+    failed_tickers = []
+
+    for ticker in tickers:
+        try:
+            if ticker in df.columns.levels[0]:
+                data = df[ticker].dropna()
+                if len(data) > 0:
+                    valid_tickers.append(ticker)
+                else:
+                    failed_tickers.append(ticker)
+            else:
+                failed_tickers.append(ticker)
+        except Exception:
+            failed_tickers.append(ticker)
+
+    print(f"Price data success: {len(valid_tickers)}")
+    print(f"Price data failures: {len(failed_tickers)}")
+
+    if failed_tickers:
+        print("Failed tickers sample:", failed_tickers[:10])
 
     results = analyse(df)
 
@@ -291,6 +288,10 @@ if failed_tickers:
 
     results.sort(key=lambda x: len(x["signals"]), reverse=True)
     top = results[:10]
+
+    print("Scan summary:")
+    print(f"Signals detected: {len(results)}")
+    print(f"Top opportunities returned: {len(top)}")
 
     message = "📊 ASX Momentum Scanner\n\n🏆 Top Opportunities\n\n"
 
