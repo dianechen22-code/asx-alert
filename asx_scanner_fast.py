@@ -1,4 +1,5 @@
 from __future__ import annotations
+from io import StringIO
 
 import os
 import traceback
@@ -59,7 +60,7 @@ def get_asx200() -> list[str]:
         response = requests.get(url, headers=headers, timeout=30)
         response.raise_for_status()
 
-        tables = pd.read_html(response.text)
+        tables = pd.read_html(StringIO(response.text))
         table = tables[0]
 
         code_col = "Code" if "Code" in table.columns else table.columns[0]
