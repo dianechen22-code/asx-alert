@@ -16,7 +16,9 @@ INDEX = "STW.AX"
 FALLBACK_TICKERS = [
     "CBA.AX", "BHP.AX", "CSL.AX", "WES.AX", "MQG.AX",
     "NAB.AX", "WBC.AX", "ANZ.AX", "FMG.AX", "TLS.AX",
-    "WOW.AX", "COL.AX", "RIO.AX", "GMG.AX", "ALL.AX"
+    "WOW.AX", "COL.AX", "RIO.AX", "GMG.AX", "ALL.AX", 
+    "DRO.AX", "ZIP.AX", "360.AX", "NEU.AX", "TLX.AX",
+    "DMP.AX"
 ]
 
 
@@ -91,27 +93,30 @@ def get_asx200() -> list[str]:
     }
 
     try:
+        print("Fetching STW basket...")
+
         response = requests.get(basket_url, headers=headers, timeout=30)
         response.raise_for_status()
 
         lines = response.text.splitlines()
+
         header_idx = None
 
         for i, line in enumerate(lines):
-            if line.strip().startswith("TICKER,"):
+            if line.startswith("TICKER"):
                 header_idx = i
                 break
 
         if header_idx is None:
-            raise ValueError("Could not find holdings header row in STW basket CSV.")
+            raise ValueError("Holdings header not found")
 
         holdings_csv = "\n".join(lines[header_idx:])
         df = pd.read_csv(StringIO(holdings_csv))
 
-        if "TICKER" not in df.columns:
-            raise ValueError("STW basket CSV missing TICKER column.")
+                                      
+                                                                     
 
-        tickers = (
+        raw_tickers = (
             df["TICKER"]
             .dropna()
             .astype(str)
@@ -120,21 +125,42 @@ def get_asx200() -> list[str]:
             .tolist()
         )
 
-        # Keep only plausible ASX ticker codes
-        tickers = [t for t in tickers if re.fullmatch(r"[A-Z0-9]{2,5}", t)]
+        print(f"Raw tickers parsed: {len(raw_tickers)}")
+                                                                           
 
-        # Validate against official ASX listed companies file
+                                                             
+                                           
+        raw_tickers = [t for t in raw_tickers if re.fullmatch(r"[A-Z0-9]{2,5}", t)]
+
+                              
+        print(f"Ticker format valid: {len(raw_tickers)}")
+
         valid_codes = get_valid_asx_codes()
-        tickers = [t for t in tickers if t in valid_codes]
+
+        tickers = [t for t in raw_tickers if t in valid_codes]
+                                                                         
+                                                    
+                               
+
+        print(f"Tickers after ASX validation: {len(tickers)}")
 
         if len(tickers) < 150:
-            raise ValueError(f"Too few valid tickers parsed from STW basket CSV: {len(tickers)}")
+            raise ValueError("Too few tickers after validation")
+                            
 
-        return sorted({f"{t}.AX" for t in tickers})
+        tickers = sorted({f"{t}.AX" for t in tickers})
+                
+
+        print(f"Final ASX200 ticker count: {len(tickers)}")
+                                         
+
+        return tickers
+                    
 
     except Exception as e:
-        print(f"Could not fetch ASX200 tickers from STW basket CSV: {e}")
-        print("Using fallback ticker list instead.")
+        print(f"Primary ticker source failed: {e}")
+        print(f"Using fallback list ({len(FALLBACK_TICKERS)} tickers)")
+
         return FALLBACK_TICKERS
 
 
@@ -218,14 +244,41 @@ def main() -> None:
     if market.empty or len(market) < 30:
         raise ValueError("Not enough market data for index.")
 
-    df = yf.download(
-        tickers,
-        period="1y",
-        interval="1d",
-        group_by="ticker",
-        progress=False,
-        auto_adjust=False
-    )
+print("Downloading price data...")
+
+df = yf.download(
+    tickers,
+    period="1y",
+    interval="1d",
+    group_by="ticker",
+    progress=False,
+    auto_adjust=False
+)
+
+valid_tickers = []
+failed_tickers = []
+
+for ticker in tickers:
+    try:
+        if ticker in df.columns.levels[0]:
+            data = df[ticker].dropna()
+            if len(data) > 0:
+                valid_tickers.append(ticker)
+            else:
+                failed_tickers.append(ticker)
+        else:
+            failed_tickers.append(ticker)
+    except Exception:
+        failed_tickers.append(ticker)
+
+print(f"Price data success: {len(valid_tickers)}")
+print(f"Price data failures: {len(failed_tickers)}")
+print("Scan summary:")
+print(f"Signals detected: {len(results)}")
+print(f"Top opportunities returned: {len(top)}")
+
+if failed_tickers:
+    print("Failed tickers sample:", failed_tickers[:10])
 
     if df.empty:
         raise ValueError("No stock data downloaded.")
