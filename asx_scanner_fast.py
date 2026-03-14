@@ -103,14 +103,9 @@ def get_asx200() -> list[str]:
         header_idx = None
         for i, line in enumerate(lines):
             cleaned = line.lstrip("\ufeff").strip().upper()
-
-            if (
-                "TICKER" in cleaned
-                and "SEDOL" in cleaned
-                and "ISIN" in cleaned
-            ):
+            if "TICKER" in cleaned and "SEDOL" in cleaned and "ISIN" in cleaned:
                 header_idx = i
-                print(f"Found STW holdings header on line {i}: {line[:120]}")
+                print(f"Found STW holdings header on line {i}: {line[:140]}")
                 break
 
         if header_idx is None:
@@ -121,6 +116,9 @@ def get_asx200() -> list[str]:
 
         holdings_csv = "\n".join(lines[header_idx:])
         df = pd.read_csv(StringIO(holdings_csv))
+
+        # Normalise columns
+        df.columns = [str(c).strip().upper() for c in df.columns]
 
         if "TICKER" not in df.columns:
             raise ValueError(f"STW basket CSV missing TICKER column. Columns found: {list(df.columns)}")
@@ -135,12 +133,25 @@ def get_asx200() -> list[str]:
         )
 
         print(f"Raw tickers parsed: {len(raw_tickers)}")
+        print("Sample raw tickers:", raw_tickers[:10])
 
-        raw_tickers = [t for t in raw_tickers if re.fullmatch(r"[A-Z0-9]{2,5}", t)]
-        print(f"Ticker format valid: {len(raw_tickers)}")
+        cleaned_tickers = []
+        for t in raw_tickers:
+            # Take first token only, e.g. "CBA AU" -> "CBA"
+            code = t.split()[0].strip()
+
+            # Remove any non-alphanumeric characters just in case
+            code = re.sub(r"[^A-Z0-9]", "", code)
+
+            if re.fullmatch(r"[A-Z0-9]{2,5}", code):
+                cleaned_tickers.append(code)
+
+        print(f"Ticker format valid: {len(cleaned_tickers)}")
+        print("Sample cleaned tickers:", cleaned_tickers[:10])
 
         valid_codes = get_valid_asx_codes()
-        tickers = [t for t in raw_tickers if t in valid_codes]
+        tickers = [t for t in cleaned_tickers if t in valid_codes]
+
         print(f"Tickers after ASX validation: {len(tickers)}")
 
         if len(tickers) < 150:
