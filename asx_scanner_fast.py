@@ -62,13 +62,26 @@ def get_valid_asx_codes() -> set[str]:
     response = requests.get(url, headers=headers, timeout=30)
     response.raise_for_status()
 
-    df = pd.read_csv(StringIO(response.text))
+    # ASX CSV has a preamble line before the real header
+    df = pd.read_csv(StringIO(response.text), skiprows=1)
 
-    code_col = "ASX code"
-    if code_col not in df.columns:
-        raise ValueError("ASX listed companies CSV format changed.")
+    # Normalise column names
+    df.columns = [str(c).strip().lower() for c in df.columns]
+    print("ASX listed companies CSV columns:", list(df.columns))
 
-    return set(
+    # Find the ASX code column flexibly
+    code_col = None
+    for col in df.columns:
+        if "asx" in col and "code" in col:
+            code_col = col
+            break
+
+    if code_col is None:
+        raise ValueError(
+            f"Could not find ASX code column. Columns found: {list(df.columns)}"
+        )
+
+    codes = (
         df[code_col]
         .dropna()
         .astype(str)
@@ -76,6 +89,11 @@ def get_valid_asx_codes() -> set[str]:
         .str.upper()
         .tolist()
     )
+
+    print(f"Valid ASX codes loaded: {len(codes)}")
+    print("Sample ASX codes:", codes[:10])
+
+    return set(codes)
 
 
 def get_asx200() -> list[str]:
