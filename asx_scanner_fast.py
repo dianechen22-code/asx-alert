@@ -2,6 +2,7 @@ from __future__ import annotations
 from io import StringIO
 
 import os
+import re
 import traceback
 import pandas as pd
 import yfinance as yf
@@ -45,8 +46,41 @@ def send(msg: str) -> None:
 # ASX200 TICKERS
 # --------------------------
 
+def get_valid_asx_codes() -> set[str]:
+    url = "https://www.asx.com.au/asx/research/ASXListedCompanies.csv"
+
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (X11; Linux x86_64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/122.0.0.0 Safari/537.36"
+        )
+    }
+
+    response = requests.get(url, headers=headers, timeout=30)
+    response.raise_for_status()
+
+    df = pd.read_csv(StringIO(response.text))
+
+    code_col = "ASX code"
+    if code_col not in df.columns:
+        raise ValueError("ASX listed companies CSV format changed.")
+
+    return set(
+        df[code_col]
+        .dropna()
+        .astype(str)
+        .str.strip()
+        .str.upper()
+        .tolist()
+    )
+
+
 def get_asx200() -> list[str]:
-    url = "https://en.wikipedia.org/wiki/S%26P/ASX_200"
+    basket_url = (
+        "https://www.ssga.com/au/en_gb/institutional/"
+        "library-content/products/fund-data/etfs/apac/basket-au-en-stw.csv"
+    )
 
     headers = {
         "User-Agent": (
@@ -57,22 +91,49 @@ def get_asx200() -> list[str]:
     }
 
     try:
-        response = requests.get(url, headers=headers, timeout=30)
+        response = requests.get(basket_url, headers=headers, timeout=30)
         response.raise_for_status()
 
-        tables = pd.read_html(StringIO(response.text))
-        table = tables[0]
+        lines = response.text.splitlines()
+        header_idx = None
 
-        code_col = "Code" if "Code" in table.columns else table.columns[0]
-        tickers = [f"{str(t).strip()}.AX" for t in table[code_col].dropna().tolist()]
+        for i, line in enumerate(lines):
+            if line.strip().startswith("TICKER,"):
+                header_idx = i
+                break
 
-        if not tickers:
-            raise ValueError("No tickers found on Wikipedia page.")
+        if header_idx is None:
+            raise ValueError("Could not find holdings header row in STW basket CSV.")
 
-        return tickers
+        holdings_csv = "\n".join(lines[header_idx:])
+        df = pd.read_csv(StringIO(holdings_csv))
+
+        if "TICKER" not in df.columns:
+            raise ValueError("STW basket CSV missing TICKER column.")
+
+        tickers = (
+            df["TICKER"]
+            .dropna()
+            .astype(str)
+            .str.strip()
+            .str.upper()
+            .tolist()
+        )
+
+        # Keep only plausible ASX ticker codes
+        tickers = [t for t in tickers if re.fullmatch(r"[A-Z0-9]{2,5}", t)]
+
+        # Validate against official ASX listed companies file
+        valid_codes = get_valid_asx_codes()
+        tickers = [t for t in tickers if t in valid_codes]
+
+        if len(tickers) < 150:
+            raise ValueError(f"Too few valid tickers parsed from STW basket CSV: {len(tickers)}")
+
+        return sorted({f"{t}.AX" for t in tickers})
 
     except Exception as e:
-        print(f"Could not fetch ASX200 tickers from Wikipedia: {e}")
+        print(f"Could not fetch ASX200 tickers from STW basket CSV: {e}")
         print("Using fallback ticker list instead.")
         return FALLBACK_TICKERS
 
