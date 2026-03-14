@@ -105,19 +105,15 @@ def get_asx200() -> list[str]:
             cleaned = line.lstrip("\ufeff").strip().upper()
             if "TICKER" in cleaned and "SEDOL" in cleaned and "ISIN" in cleaned:
                 header_idx = i
-                print(f"Found STW holdings header on line {i}: {line[:140]}")
+                print(f"Found STW holdings header on line {i}: {line[:160]}")
                 break
 
         if header_idx is None:
-            print("First 20 lines of STW file for debugging:")
-            for j, line in enumerate(lines[:20]):
-                print(f"{j}: {line}")
             raise ValueError("Holdings header not found")
 
         holdings_csv = "\n".join(lines[header_idx:])
         df = pd.read_csv(StringIO(holdings_csv))
 
-        # Normalise columns
         df.columns = [str(c).strip().upper() for c in df.columns]
 
         if "TICKER" not in df.columns:
@@ -137,10 +133,13 @@ def get_asx200() -> list[str]:
 
         cleaned_tickers = []
         for t in raw_tickers:
-            # Take first token only, e.g. "CBA AU" -> "CBA"
-            code = t.split()[0].strip()
+            # Remove leading apostrophes, e.g. "'WEB" -> "WEB"
+            code = t.lstrip("'").strip()
 
-            # Remove any non-alphanumeric characters just in case
+            # If a suffix exists, keep first token only, e.g. "CBA AU" -> "CBA"
+            code = code.split()[0]
+
+            # Remove any remaining non-alphanumeric characters
             code = re.sub(r"[^A-Z0-9]", "", code)
 
             if re.fullmatch(r"[A-Z0-9]{2,5}", code):
