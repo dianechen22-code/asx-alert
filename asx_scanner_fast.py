@@ -101,20 +101,29 @@ def get_asx200() -> list[str]:
         lines = response.text.splitlines()
 
         header_idx = None
-
         for i, line in enumerate(lines):
-            if line.startswith("TICKER"):
+            cleaned = line.lstrip("\ufeff").strip().upper()
+
+            if (
+                "TICKER" in cleaned
+                and "SEDOL" in cleaned
+                and "ISIN" in cleaned
+            ):
                 header_idx = i
+                print(f"Found STW holdings header on line {i}: {line[:120]}")
                 break
 
         if header_idx is None:
+            print("First 20 lines of STW file for debugging:")
+            for j, line in enumerate(lines[:20]):
+                print(f"{j}: {line}")
             raise ValueError("Holdings header not found")
 
         holdings_csv = "\n".join(lines[header_idx:])
         df = pd.read_csv(StringIO(holdings_csv))
 
-                                      
-                                                                     
+        if "TICKER" not in df.columns:
+            raise ValueError(f"STW basket CSV missing TICKER column. Columns found: {list(df.columns)}")
 
         raw_tickers = (
             df["TICKER"]
@@ -126,41 +135,25 @@ def get_asx200() -> list[str]:
         )
 
         print(f"Raw tickers parsed: {len(raw_tickers)}")
-                                                                           
 
-                                                             
-                                           
         raw_tickers = [t for t in raw_tickers if re.fullmatch(r"[A-Z0-9]{2,5}", t)]
-
-                              
         print(f"Ticker format valid: {len(raw_tickers)}")
 
         valid_codes = get_valid_asx_codes()
-
         tickers = [t for t in raw_tickers if t in valid_codes]
-                                                                         
-                                                    
-                               
-
         print(f"Tickers after ASX validation: {len(tickers)}")
 
         if len(tickers) < 150:
-            raise ValueError("Too few tickers after validation")
-                            
+            raise ValueError(f"Too few valid tickers parsed from STW basket CSV: {len(tickers)}")
 
-        tickers = sorted({f"{t}.AX" for t in tickers})
-                
+        final_tickers = sorted({f"{t}.AX" for t in tickers})
+        print(f"Final ASX200 ticker count: {len(final_tickers)}")
 
-        print(f"Final ASX200 ticker count: {len(tickers)}")
-                                         
-
-        return tickers
-                    
+        return final_tickers
 
     except Exception as e:
         print(f"Primary ticker source failed: {e}")
         print(f"Using fallback list ({len(FALLBACK_TICKERS)} tickers)")
-
         return FALLBACK_TICKERS
 
 
