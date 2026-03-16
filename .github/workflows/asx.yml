@@ -3,6 +3,7 @@ name: ASX Scanner
 on:
   schedule:
     - cron: "20 8 * * 1-5"
+    - cron: "*/15 * * * *"
   workflow_dispatch:
 
 jobs:
